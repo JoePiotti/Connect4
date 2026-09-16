@@ -129,20 +129,20 @@ function launchFireworks(durationMs) {
   }
   resize();
 
-  const colors = ['#ff5c7a', '#f0c14a', '#7ec8ff', '#7dffb3', '#ff9a3c', '#e0aaff', '#ffffff'];
+  const colors = ['#ff5c7a', '#f0c14a', '#7ec8ff', '#ffd76a', '#ff9a3c', '#e0aaff', '#ffffff'];
   const rockets = [];
   const particles = [];
-  const duration = durationMs || 4200;
+  const duration = durationMs || 5000;
 
   function burst(x, y, color) {
-    const n = 46 + Math.floor(Math.random() * 16);
+    const n = 72 + Math.floor(Math.random() * 24);
     for (let i = 0; i < n; i++) {
-      const a = (Math.PI * 2 * i) / n + Math.random() * 0.25;
-      const sp = (1.5 + Math.random() * 3.6) * dpr;
+      const a = (Math.PI * 2 * i) / n + Math.random() * 0.2;
+      const sp = (1.8 + Math.random() * 4.4) * dpr;
       particles.push({
         x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-        life: 1, decay: 0.01 + Math.random() * 0.012,
-        color, size: (1.4 + Math.random() * 1.8) * dpr
+        life: 1, decay: 0.005 + Math.random() * 0.006,
+        color, size: (2.2 + Math.random() * 2.6) * dpr
       });
     }
   }
@@ -150,28 +150,33 @@ function launchFireworks(durationMs) {
   function spawnRocket() {
     const x = (0.12 + Math.random() * 0.76) * canvas.width;
     rockets.push({
-      x, y: canvas.height,
-      ty: (0.16 + Math.random() * 0.38) * canvas.height,
-      vy: -(6.5 + Math.random() * 3.2) * dpr,
+      x, y: canvas.height * 0.92,
+      ty: (0.18 + Math.random() * 0.42) * canvas.height,
+      vy: -(7.5 + Math.random() * 3.5) * dpr,
       color: colors[Math.floor(Math.random() * colors.length)]
     });
   }
 
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 5; i++) {
     burst(
-      (0.22 + Math.random() * 0.56) * canvas.width,
-      (0.22 + Math.random() * 0.32) * canvas.height,
+      (0.18 + Math.random() * 0.64) * canvas.width,
+      (0.18 + Math.random() * 0.4) * canvas.height,
       colors[i % colors.length]
     );
   }
+  spawnRocket();
+  spawnRocket();
 
   const start = performance.now();
-  let lastSpawn = 0;
+  let lastSpawn = start;
   function frame(now) {
     const elapsed = now - start;
+    if (!canvas.parentNode) return;
+    ctx.globalCompositeOperation = 'source-over';
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.globalCompositeOperation = 'lighter';
 
-    if (elapsed < duration - 900 && now - lastSpawn > 260) {
+    if (elapsed < duration - 800 && now - lastSpawn > 220) {
       spawnRocket();
       lastSpawn = now;
     }
@@ -181,7 +186,11 @@ function launchFireworks(durationMs) {
       r.y += r.vy;
       ctx.beginPath();
       ctx.fillStyle = r.color;
-      ctx.arc(r.x, r.y, 2.1 * dpr, 0, Math.PI * 2);
+      ctx.arc(r.x, r.y, 3.2 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.fillStyle = '#fff';
+      ctx.arc(r.x, r.y, 1.4 * dpr, 0, Math.PI * 2);
       ctx.fill();
       if (r.y <= r.ty) {
         burst(r.x, r.y, r.color);
@@ -193,18 +202,23 @@ function launchFireworks(durationMs) {
       const p = particles[i];
       p.x += p.vx;
       p.y += p.vy;
-      p.vy += 0.045 * dpr;
+      p.vy += 0.035 * dpr;
+      p.vx *= 0.992;
       p.life -= p.decay;
       if (p.life <= 0) { particles.splice(i, 1); continue; }
-      ctx.globalAlpha = Math.max(p.life, 0);
+      ctx.globalAlpha = Math.max(p.life, 0) * 0.45;
       ctx.beginPath();
       ctx.fillStyle = p.color;
+      ctx.arc(p.x, p.y, p.size * 2.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = Math.max(p.life, 0);
+      ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
 
-    if (!canvas.parentNode) return;
     if (elapsed < duration || rockets.length || particles.length) {
       requestAnimationFrame(frame);
     } else {
@@ -232,7 +246,7 @@ function maybeCelebrateMatch(s) {
   if (celebratedKey === key) return;
   celebratedKey = key;
   playTada();
-  launchFireworks(4500);
+  launchFireworks(5200);
 }
 
 function leaveGame() {
