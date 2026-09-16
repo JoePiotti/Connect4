@@ -3,6 +3,8 @@ const app = document.getElementById('app');
 let state = null;
 let lastName = localStorage.getItem('c4_name') || '';
 let animDrop = null; // { row, col } to animate once
+let celebratedKey = null;
+let audioCtx = null;
 
 socket.on('session', ({ token }) => {
   sessionStorage.setItem('c4_token', token);
@@ -64,6 +66,175 @@ function flashToast(message) {
   setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 500); }, 2200);
 }
 
+function getAudioCtx() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  if (!audioCtx) audioCtx = new AC();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+document.addEventListener('pointerdown', () => getAudioCtx(), { passive: true });
+
+function playTada() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const t0 = ctx.currentTime + 0.02;
+  const master = ctx.createGain();
+  master.gain.setValueAtTime(0.24, t0);
+  master.gain.exponentialRampToValueAtTime(0.001, t0 + 1.35);
+  master.connect(ctx.destination);
+
+  function tone(freq, start, dur, type, peak) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0 + start);
+    gain.gain.setValueAtTime(0.0001, t0 + start);
+    gain.gain.exponentialRampToValueAtTime(peak, t0 + start + 0.018);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + start + dur);
+    osc.connect(gain);
+    gain.connect(master);
+    osc.start(t0 + start);
+    osc.stop(t0 + start + dur + 0.02);
+  }
+
+  // Short pickup, then a major “ta-da” chord
+  tone(392.00, 0.00, 0.14, 'triangle', 0.55);
+  tone(523.25, 0.11, 0.16, 'triangle', 0.6);
+  const chord = 0.28;
+  tone(523.25, chord, 0.85, 'triangle', 0.42);
+  tone(659.25, chord, 0.85, 'triangle', 0.36);
+  tone(783.99, chord, 0.9, 'sine', 0.32);
+  tone(1046.5, chord, 0.95, 'sine', 0.28);
+  tone(1567.98, chord + 0.04, 0.4, 'sine', 0.1);
+}
+
+function launchFireworks(durationMs) {
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const existing = document.getElementById('fireworks');
+  if (existing) existing.remove();
+
+  const canvas = document.createElement('canvas');
+  canvas.id = 'fireworks';
+  canvas.className = 'fireworks';
+  canvas.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+  function resize() {
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+  }
+  resize();
+
+  const colors = ['#ff5c7a', '#f0c14a', '#7ec8ff', '#7dffb3', '#ff9a3c', '#e0aaff', '#ffffff'];
+  const rockets = [];
+  const particles = [];
+  const duration = durationMs || 4200;
+
+  function burst(x, y, color) {
+    const n = 46 + Math.floor(Math.random() * 16);
+    for (let i = 0; i < n; i++) {
+      const a = (Math.PI * 2 * i) / n + Math.random() * 0.25;
+      const sp = (1.5 + Math.random() * 3.6) * dpr;
+      particles.push({
+        x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        life: 1, decay: 0.01 + Math.random() * 0.012,
+        color, size: (1.4 + Math.random() * 1.8) * dpr
+      });
+    }
+  }
+
+  function spawnRocket() {
+    const x = (0.12 + Math.random() * 0.76) * canvas.width;
+    rockets.push({
+      x, y: canvas.height,
+      ty: (0.16 + Math.random() * 0.38) * canvas.height,
+      vy: -(6.5 + Math.random() * 3.2) * dpr,
+      color: colors[Math.floor(Math.random() * colors.length)]
+    });
+  }
+
+  for (let i = 0; i < 3; i++) {
+    burst(
+      (0.22 + Math.random() * 0.56) * canvas.width,
+      (0.22 + Math.random() * 0.32) * canvas.height,
+      colors[i % colors.length]
+    );
+  }
+
+  const start = performance.now();
+  let lastSpawn = 0;
+  function frame(now) {
+    const elapsed = now - start;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (elapsed < duration - 900 && now - lastSpawn > 260) {
+      spawnRocket();
+      lastSpawn = now;
+    }
+
+    for (let i = rockets.length - 1; i >= 0; i--) {
+      const r = rockets[i];
+      r.y += r.vy;
+      ctx.beginPath();
+      ctx.fillStyle = r.color;
+      ctx.arc(r.x, r.y, 2.1 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+      if (r.y <= r.ty) {
+        burst(r.x, r.y, r.color);
+        rockets.splice(i, 1);
+      }
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.045 * dpr;
+      p.life -= p.decay;
+      if (p.life <= 0) { particles.splice(i, 1); continue; }
+      ctx.globalAlpha = Math.max(p.life, 0);
+      ctx.beginPath();
+      ctx.fillStyle = p.color;
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    if (!canvas.parentNode) return;
+    if (elapsed < duration || rockets.length || particles.length) {
+      requestAnimationFrame(frame);
+    } else {
+      canvas.remove();
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+function clearFireworks() {
+  const fw = document.getElementById('fireworks');
+  if (fw) fw.remove();
+}
+
+function maybeCelebrateMatch(s) {
+  if (!s || s.phase === 'playing' || s.phase === 'lobby') {
+    celebratedKey = null;
+    clearFireworks();
+    return;
+  }
+  if (s.phase !== 'matchover') return;
+  const r = s.lastResult || {};
+  if (!r.winner) return;
+  const key = `${s.code}:${(r.match && r.match.red) || 0}-${(r.match && r.match.yellow) || 0}:${r.winner}`;
+  if (celebratedKey === key) return;
+  celebratedKey = key;
+  playTada();
+  launchFireworks(4500);
+}
+
 function leaveGame() {
   if (!confirm('Leave this game?')) return;
   sessionStorage.removeItem('c4_token');
@@ -76,8 +247,14 @@ function colorLabel(c) { return c === 1 ? 'Red' : c === 2 ? 'Yellow' : ''; }
 function colorClass(c) { return c === 1 ? 'red' : c === 2 ? 'yellow' : ''; }
 
 function render() {
-  if (!state) return renderHome();
-  if (state.phase === 'lobby') return renderLobby();
+  if (!state) {
+    clearFireworks();
+    return renderHome();
+  }
+  if (state.phase === 'lobby') {
+    maybeCelebrateMatch(state);
+    return renderLobby();
+  }
   return renderPlay();
 }
 
@@ -214,8 +391,9 @@ function renderPlay() {
     const detail = r.kind === 'draw'
       ? 'Board is full'
       : `${colorLabel(r.winner)} wins`;
+    const cele = s.phase === 'matchover' ? ' celebrate' : '';
     endOverlay = `
-      <div class="overlay-end"><div class="box">
+      <div class="overlay-end${cele}"><div class="box">
         <h2>${title}</h2>
         <p>${detail}<br>Match ${r.match ? r.match.red : s.match.red}–${r.match ? r.match.yellow : s.match.yellow} (to ${s.match.to})</p>
         ${isHost
@@ -249,7 +427,7 @@ function renderPlay() {
   }).join('');
 
   app.innerHTML = `
-    <div class="play">
+    <div class="play${s.phase === 'matchover' ? ' celebrating' : ''}">
       <div class="topbar">
         <div class="score">
           <div class="pill${yourColor === 1 ? ' you' : ''}">
@@ -291,6 +469,7 @@ function renderPlay() {
   if (next) next.onclick = () => socket.emit('start', {}, ack);
   const lobby = document.getElementById('lobby');
   if (lobby) lobby.onclick = () => socket.emit('returnToLobby');
+  maybeCelebrateMatch(s);
 }
 
 renderHome();
