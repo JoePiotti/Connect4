@@ -141,7 +141,7 @@ function launchFireworks(durationMs) {
       const sp = (1.8 + Math.random() * 4.4) * dpr;
       particles.push({
         x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-        life: 1, decay: 0.005 + Math.random() * 0.006,
+        life: 1, decay: 0.004 + Math.random() * 0.003,
         color, size: (2.2 + Math.random() * 2.6) * dpr
       });
     }
@@ -168,7 +168,7 @@ function launchFireworks(durationMs) {
   spawnRocket();
 
   const start = performance.now();
-  let lastSpawn = start;
+  let nextBurstAt = 280;
   function frame(now) {
     const elapsed = now - start;
     if (!canvas.parentNode) return;
@@ -176,9 +176,14 @@ function launchFireworks(durationMs) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.globalCompositeOperation = 'lighter';
 
-    if (elapsed < duration - 800 && now - lastSpawn > 220) {
+    while (elapsed < duration - 700 && elapsed >= nextBurstAt) {
       spawnRocket();
-      lastSpawn = now;
+      burst(
+        (0.14 + Math.random() * 0.72) * canvas.width,
+        (0.16 + Math.random() * 0.42) * canvas.height,
+        colors[Math.floor(Math.random() * colors.length)]
+      );
+      nextBurstAt += 300 + Math.random() * 140;
     }
 
     for (let i = rockets.length - 1; i >= 0; i--) {
