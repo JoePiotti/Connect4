@@ -142,8 +142,19 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 .disc.yellow { background: radial-gradient(circle at 35% 30%, #ffe08a, var(--yellow) 58%, #b8861a); }
 .disc.drop { animation: drop-in .28s cubic-bezier(.2,.9,.3,1); }
 .disc.win {
+  z-index: 2;
   outline: 3px solid #fff;
-  box-shadow: inset 0 3px 5px rgba(255,255,255,.28), 0 0 0 2px #ffd76a, 0 0 14px rgba(255,215,106,.8);
+  animation: win-glow .65s ease-in-out infinite alternate;
+}
+@keyframes win-glow {
+  from {
+    box-shadow: inset 0 3px 5px rgba(255,255,255,.28), 0 0 0 2px #ffd76a, 0 0 10px rgba(255,215,106,.55);
+    filter: brightness(1.05);
+  }
+  to {
+    box-shadow: inset 0 3px 5px rgba(255,255,255,.4), 0 0 0 3px #fff4c2, 0 0 22px rgba(255,230,120,.95);
+    filter: brightness(1.22);
+  }
 }
 @keyframes drop-in {
   from { transform: translateY(-120%); opacity: .3; }
@@ -186,4 +197,5 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 }
 @media (prefers-reduced-motion: reduce) {
   .overlay-end.celebrate h2 { animation: none; }
+  .disc.win { animation: none; }
 }

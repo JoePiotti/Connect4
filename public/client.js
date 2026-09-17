@@ -5,6 +5,9 @@ let lastName = localStorage.getItem('c4_name') || '';
 let animDrop = null; // { row, col } to animate once
 let celebratedKey = null;
 let audioCtx = null;
+const WIN_REVEAL_MS = 2800;
+let showEndModal = true;
+let endModalTimer = null;
 
 socket.on('session', ({ token }) => {
   sessionStorage.setItem('c4_token', token);
@@ -23,16 +26,33 @@ socket.on('disconnect', () => {
 socket.on('removed', ({ message }) => {
   sessionStorage.removeItem('c4_token');
   state = null;
+  showEndModal = true;
+  clearTimeout(endModalTimer);
   renderHome();
   if (message) flashToast(message);
 });
 
 socket.on('state', s => {
   if (!sessionStorage.getItem('c4_token')) return;
+  const prevPhase = state && state.phase;
   const prev = state && state.lastDrop;
   const next = s.lastDrop;
   if (next && (!prev || prev.row !== next.row || prev.col !== next.col || prev.color !== next.color)) {
     animDrop = { row: next.row, col: next.col };
+  }
+  const justWon = (s.phase === 'gameover' || s.phase === 'matchover')
+    && prevPhase === 'playing'
+    && (s.winCells || []).length;
+  if (justWon) {
+    showEndModal = false;
+    clearTimeout(endModalTimer);
+    endModalTimer = setTimeout(() => {
+      showEndModal = true;
+      render();
+    }, WIN_REVEAL_MS);
+  } else if (s.phase !== 'gameover' && s.phase !== 'matchover') {
+    showEndModal = true;
+    clearTimeout(endModalTimer);
   }
   state = s;
   render();
@@ -258,6 +278,8 @@ function leaveGame() {
   if (!confirm('Leave this game?')) return;
   sessionStorage.removeItem('c4_token');
   state = null;
+  showEndModal = true;
+  clearTimeout(endModalTimer);
   renderHome();
   socket.emit('leaveGame', {}, () => {});
 }
@@ -299,6 +321,27 @@ function copyLink() {
   } else flashToast(url);
 }
 
+function showAbout() {
+  const overlay = document.createElement('div');
+  overlay.className = 'qr-overlay';
+  overlay.innerHTML = `
+    <div class="qr-box" style="max-width:340px;">
+      <div style="font-size:40px;margin-bottom:6px;">🔴🟡</div>
+      <div class="brand" style="font-size:18px;margin-bottom:12px;">Connect Four</div>
+      <p style="color:var(--muted);font-size:14px;line-height:1.6;margin:0 0 16px;text-align:left;">
+        Built by one person, just for the fun of it. No ads, no tracking, no account required — grab a friend and drop some discs.<br><br>
+        If you had a good time and want to say thanks, buying me a coffee means a lot.
+      </p>
+      <a href="https://buymeacoffee.com/joepiotti" target="_blank" rel="noopener"
+         style="display:block;text-decoration:none;background:#ffdd00;color:#1a1200;font-weight:700;font-size:15px;border-radius:10px;padding:13px;text-align:center;margin-bottom:10px;">
+        ☕ Buy me a coffee
+      </a>
+      <button class="sec" id="aboutdone" style="margin:0;">Close</button>
+    </div>`;
+  overlay.onclick = e => { if (e.target === overlay || e.target.id === 'aboutdone') overlay.remove(); };
+  document.body.appendChild(overlay);
+}
+
 function renderHome() {
   const params = new URLSearchParams(location.search);
   const preCode = (params.get('code') || '').toUpperCase().slice(0, 4);
@@ -320,8 +363,11 @@ function renderHome() {
       </div>
       <div style="text-align:center;margin-top:12px;">
         <a class="muted" href="https://www.party-game.net" target="_blank" rel="noopener">More party games</a>
+        &nbsp;·&nbsp;
+        <span id="about-link" class="muted" style="cursor:pointer;text-decoration:underline;">About &amp; Support</span>
       </div>
     </div>`;
+  document.getElementById('about-link').onclick = showAbout;
   const name = () => document.getElementById('name').value;
   const validate = () => {
     if (name().trim().length < 2) {
@@ -347,7 +393,11 @@ function renderLobby() {
   app.innerHTML = `
     <div class="shell">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span class="brand">🔴 Connect Four</span><span class="muted">Lobby</span>
+        <span class="brand">🔴 Connect Four</span>
+        <span style="display:flex;align-items:center;gap:10px;">
+          <span id="about-link-lobby" class="muted" style="cursor:pointer;font-size:12px;text-decoration:underline;">About</span>
+          <span class="muted">Lobby</span>
+        </span>
       </div>
       <div class="card" style="text-align:center;margin-top:8px;">
         <div class="h">Room code</div>
@@ -380,6 +430,7 @@ function renderLobby() {
   document.getElementById('qr').onclick = showQR;
   document.getElementById('copy').onclick = copyLink;
   document.getElementById('leave').onclick = leaveGame;
+  document.getElementById('about-link-lobby').onclick = showAbout;
   document.querySelectorAll('.tier[data-m]').forEach(t => {
     t.onclick = () => socket.emit('setMatchTo', { matchTo: parseInt(t.getAttribute('data-m'), 10) });
   });
@@ -401,7 +452,8 @@ function renderPlay() {
   const yelP = s.players.find(p => p.color === 2);
 
   let endOverlay = '';
-  if (s.phase === 'gameover' || s.phase === 'matchover') {
+  const atEnd = s.phase === 'gameover' || s.phase === 'matchover';
+  if (atEnd && showEndModal) {
     const r = s.lastResult || {};
     const youWin = r.winner === yourColor;
     const title = s.phase === 'matchover'
