@@ -130,6 +130,45 @@ function playTada() {
   tone(1567.98, chord + 0.04, 0.4, 'sine', 0.1);
 }
 
+function playSadTrombone() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const t0 = ctx.currentTime + 0.03;
+  const master = ctx.createGain();
+  master.gain.setValueAtTime(0.2, t0);
+  master.gain.exponentialRampToValueAtTime(0.001, t0 + 2.2);
+  master.connect(ctx.destination);
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.Q.setValueAtTime(5, t0);
+  filter.connect(master);
+
+  // Classic wah-wah-wah-woooomp
+  const notes = [
+    { f: 349.23, t: 0.00, d: 0.34 },
+    { f: 311.13, t: 0.38, d: 0.34 },
+    { f: 277.18, t: 0.76, d: 0.34 },
+    { f: 233.08, t: 1.14, d: 0.9 }
+  ];
+  notes.forEach((n, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(n.f, t0 + n.t);
+    if (i === 3) osc.frequency.linearRampToValueAtTime(n.f * 0.9, t0 + n.t + n.d);
+    gain.gain.setValueAtTime(0.0001, t0 + n.t);
+    gain.gain.exponentialRampToValueAtTime(0.42, t0 + n.t + 0.035);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + n.t + n.d);
+    osc.connect(gain);
+    gain.connect(filter);
+    osc.start(t0 + n.t);
+    osc.stop(t0 + n.t + n.d + 0.04);
+    filter.frequency.setValueAtTime(1100, t0 + n.t);
+    filter.frequency.exponentialRampToValueAtTime(380, t0 + n.t + n.d * 0.85);
+  });
+}
+
 function launchFireworks(durationMs) {
   if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const existing = document.getElementById('fireworks');
@@ -270,8 +309,13 @@ function maybeCelebrateMatch(s) {
   const key = `${s.code}:${(r.match && r.match.red) || 0}-${(r.match && r.match.yellow) || 0}:${r.winner}`;
   if (celebratedKey === key) return;
   celebratedKey = key;
-  playTada();
-  launchFireworks(5200);
+  const youWin = r.winner === Number(s.yourColor);
+  if (youWin) {
+    playTada();
+    launchFireworks(5200);
+  } else {
+    playSadTrombone();
+  }
 }
 
 function leaveGame() {
@@ -450,19 +494,19 @@ function renderPlay() {
 
   const redP = s.players.find(p => p.color === 1);
   const yelP = s.players.find(p => p.color === 2);
+  const r = s.lastResult || {};
+  const youWin = r.winner === yourColor;
 
   let endOverlay = '';
   const atEnd = s.phase === 'gameover' || s.phase === 'matchover';
   if (atEnd && showEndModal) {
-    const r = s.lastResult || {};
-    const youWin = r.winner === yourColor;
     const title = s.phase === 'matchover'
       ? (youWin ? 'Match won!' : 'Match over')
       : (r.kind === 'draw' ? 'Draw' : (youWin ? 'You win!' : 'Game over'));
     const detail = r.kind === 'draw'
       ? 'Board is full'
       : `${colorLabel(r.winner)} wins`;
-    const cele = s.phase === 'matchover' ? ' celebrate' : '';
+    const cele = s.phase === 'matchover' && youWin ? ' celebrate' : '';
     endOverlay = `
       <div class="overlay-end${cele}"><div class="box">
         <h2>${title}</h2>
@@ -498,7 +542,7 @@ function renderPlay() {
   }).join('');
 
   app.innerHTML = `
-    <div class="play${s.phase === 'matchover' ? ' celebrating' : ''}">
+    <div class="play${s.phase === 'matchover' && youWin ? ' celebrating' : ''}">
       <div class="topbar">
         <div class="score">
           <div class="pill${yourColor === 1 ? ' you' : ''}">
